@@ -11,6 +11,19 @@ import {
 import { config } from "./config.js";
 
 const MAX_BATCH = 1000;
+
+/**
+ * Arrival timestamp with microsecond resolution that never repeats or goes
+ * backwards within this process, so two requests always have a definite
+ * arrival order (the `late` flag is defined by it).
+ */
+let lastArrivalUs = 0;
+function arrivalTimestamp(): string {
+  const us = Math.max(Math.floor((performance.timeOrigin + performance.now()) * 1000), lastArrivalUs + 1);
+  lastArrivalUs = us;
+  const ms = Math.floor(us / 1000);
+  return new Date(ms).toISOString().replace("Z", String(us % 1000).padStart(3, "0") + "Z");
+}
 const REQUIRED = ["gateway_id", "device_id", "metric", "value", "event_time", "sequence"] as const;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -70,7 +83,7 @@ export function registerIngest(app: FastifyInstance, producer: Producer) {
       });
     }
 
-    const receivedAt = new Date(now).toISOString();
+    const receivedAt = arrivalTimestamp();
     const byTopic = new Map<string, Message[]>();
     for (const [i, r] of readings.entries()) {
       const lane = chooseLane(r.event_time_ms, now);
