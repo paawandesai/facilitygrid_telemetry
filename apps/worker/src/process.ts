@@ -57,13 +57,11 @@ interface GatewayAgg {
   maxSeq: number;
   inserted: number;
   duplicates: number;
-  late: number;
 }
 
 async function writeBatch(client: pg.PoolClient, messages: ReadingMessage[]): Promise<BatchResult> {
-  // Stable sort by (device, metric): rows are locked in the same order in every
-  // transaction (no deadlocks between lanes), and a key's readings keep their
-  // broker order, so the `late` flag is deterministic.
+  // Sort by (device, metric) so every transaction locks rows in the same order:
+  // the live and backlog lanes (or two replicas) can never deadlock each other.
   const sorted = [...messages].sort(byKey);
   const res: BatchResult = { inserted: 0, duplicates: 0, late: 0, conflicts: 0, discovered: [], changed: [] };
   const knownDevices = new Set<string>();
@@ -83,7 +81,6 @@ async function writeBatch(client: pg.PoolClient, messages: ReadingMessage[]): Pr
           maxSeq: 0,
           inserted: 0,
           duplicates: 0,
-          late: 0,
         })
         .get(m.gateway_id)!;
     const recvMs = Date.parse(m.received_at);
@@ -111,11 +108,11 @@ async function writeBatch(client: pg.PoolClient, messages: ReadingMessage[]): Pr
 
     // Invariant 1: one history row per (gateway, device, metric, sequence).
     const ins = await client.query(
-      `INSERT INTO readings (gateway_id, device_id, metric, value, event_time, sequence, lane)
-       VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, $6, $7)
+      `INSERT INTO readings (gateway_id, device_id, metric, value, event_time, sequence, lane, received_at, arrival_idx)
+       VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, $6, $7, $8::timestamptz, $9)
        ON CONFLICT ON CONSTRAINT readings_identity DO NOTHING
        RETURNING id`,
-      [m.gateway_id, m.device_id, m.metric, value, m.event_time, m.sequence, m.lane],
+      [m.gateway_id, m.device_id, m.metric, value, m.event_time, m.sequence, m.lane, m.received_at, m.arrival_idx ?? 0],
     );
     if (ins.rowCount === 0) {
       // A resend (or a redelivery after a crash). Count it; never store it twice.
@@ -143,37 +140,56 @@ async function writeBatch(client: pg.PoolClient, messages: ReadingMessage[]): Pr
     changed.add(m.device_id);
 
     // Invariant 2: current state only moves forward in (event_time, gateway_id, sequence).
-    const st = await client.query(
+    // ON CONFLICT DO UPDATE locks the state row even when the WHERE rejects the
+    // update, so from here to COMMIT this transaction is the only one working on
+    // this (device, metric). That serialises the late-flag bookkeeping below.
+    await client.query(
       `INSERT INTO device_metric_state (device_id, metric, value, event_time, gateway_id, sequence, reading_id)
        VALUES ($1, $2, $3::jsonb, $4::timestamptz, $5, $6, $7)
        ON CONFLICT (device_id, metric) DO UPDATE
          SET value = EXCLUDED.value, event_time = EXCLUDED.event_time, gateway_id = EXCLUDED.gateway_id,
              sequence = EXCLUDED.sequence, reading_id = EXCLUDED.reading_id, updated_at = now()
        WHERE (EXCLUDED.event_time, EXCLUDED.gateway_id, EXCLUDED.sequence)
-           > (device_metric_state.event_time, device_metric_state.gateway_id, device_metric_state.sequence)
-       RETURNING 1`,
+           > (device_metric_state.event_time, device_metric_state.gateway_id, device_metric_state.sequence)`,
       [m.device_id, m.metric, value, m.event_time, m.gateway_id, m.sequence, readingId],
     );
-    if (st.rowCount === 0) {
-      // Something equal-or-newer is already current: stored in history, not shown as current.
-      await client.query("UPDATE readings SET late = true WHERE id = $1", [readingId]);
-      res.late++;
-      g.late++;
-    }
+
+    // Late = arrived at the API after a reading with a newer event time (same
+    // device and metric) had already arrived. Defined by arrival order at the
+    // edge, not by which worker lane got there first, so it is reproducible.
+    // Checked in both directions because the other reading may be written later.
+    const self = await client.query(
+      `UPDATE readings SET late = EXISTS (
+           SELECT 1 FROM readings o
+            WHERE o.device_id = $2 AND o.metric = $3 AND o.id <> $1
+              AND o.event_time >= $4::timestamptz
+              AND (o.received_at, o.arrival_idx) < ($7::timestamptz, $8)
+              AND (o.event_time, o.gateway_id, o.sequence) > ($4::timestamptz, $5, $6))
+        WHERE id = $1 RETURNING late`,
+      [readingId, m.device_id, m.metric, m.event_time, m.gateway_id, m.sequence, m.received_at, m.arrival_idx ?? 0],
+    );
+    const others = await client.query(
+      `UPDATE readings o SET late = true
+        WHERE o.device_id = $1 AND o.metric = $2 AND NOT o.late
+          AND o.event_time <= $3::timestamptz
+          AND (o.received_at, o.arrival_idx) > ($6::timestamptz, $7)
+          AND (o.event_time, o.gateway_id, o.sequence) < ($3::timestamptz, $4, $5)`,
+      [m.device_id, m.metric, m.event_time, m.gateway_id, m.sequence, m.received_at, m.arrival_idx ?? 0],
+    );
+    res.late += (self.rows[0]?.late ? 1 : 0) + (others.rowCount ?? 0);
   }
 
   for (const [gatewayId, g] of [...gateways].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     await client.query(
-      `INSERT INTO gateways (gateway_id, last_seen_at, max_event_time, max_sequence, readings_total, duplicates_total, late_total)
-       VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7)
+      `INSERT INTO gateways (gateway_id, last_seen_at, max_event_time, max_sequence, readings_total, duplicates_total)
+       VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6)
        ON CONFLICT (gateway_id) DO UPDATE SET
          last_seen_at     = GREATEST(gateways.last_seen_at, EXCLUDED.last_seen_at),
          max_event_time   = GREATEST(gateways.max_event_time, EXCLUDED.max_event_time),
          max_sequence     = GREATEST(gateways.max_sequence, EXCLUDED.max_sequence),
          readings_total   = gateways.readings_total + EXCLUDED.readings_total,
-         duplicates_total = gateways.duplicates_total + EXCLUDED.duplicates_total,
-         late_total       = gateways.late_total + EXCLUDED.late_total`,
-      [gatewayId, g.lastSeen, g.maxEvent, g.maxSeq, g.inserted, g.duplicates, g.late],
+         duplicates_total = gateways.duplicates_total + EXCLUDED.duplicates_total`,
+      [gatewayId, g.lastSeen, g.maxEvent, g.maxSeq, g.inserted, g.duplicates],
     );
   }
 

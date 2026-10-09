@@ -72,7 +72,7 @@ export function registerIngest(app: FastifyInstance, producer: Producer) {
 
     const receivedAt = new Date(now).toISOString();
     const byTopic = new Map<string, Message[]>();
-    for (const r of readings) {
+    for (const [i, r] of readings.entries()) {
       const lane = chooseLane(r.event_time_ms, now);
       const msg: ReadingMessage = {
         gateway_id: r.gateway_id,
@@ -82,6 +82,7 @@ export function registerIngest(app: FastifyInstance, producer: Producer) {
         event_time: r.event_time,
         sequence: r.sequence,
         received_at: receivedAt,
+        arrival_idx: i,
         lane,
       };
       const topic = lane === "live" ? TOPICS.live : TOPICS.backlog;

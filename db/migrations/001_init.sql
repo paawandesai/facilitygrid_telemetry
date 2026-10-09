@@ -27,10 +27,14 @@ CREATE TABLE readings (
   value        jsonb NOT NULL,
   event_time   timestamptz NOT NULL,
   sequence     bigint NOT NULL,
-  ingested_at  timestamptz NOT NULL DEFAULT now(),
+  received_at  timestamptz NOT NULL,         -- when the API accepted it (first arrival)
+  arrival_idx  int NOT NULL DEFAULT 0,       -- position within that request, orders a batch
+  ingested_at  timestamptz NOT NULL DEFAULT now(), -- when the worker wrote it
   lane         text NOT NULL DEFAULT 'live',
   resend_count int NOT NULL DEFAULT 0,       -- duplicates absorbed by the unique key
-  late         boolean NOT NULL DEFAULT false, -- arrived after an equal-or-newer reading was already current
+  -- Arrived after a reading with a newer event time (same device and metric)
+  -- had already arrived. Kept in history; never the current value.
+  late         boolean NOT NULL DEFAULT false,
   CONSTRAINT readings_identity UNIQUE (gateway_id, device_id, metric, sequence)
 );
 CREATE INDEX readings_device_metric_time ON readings (device_id, metric, event_time DESC);
@@ -56,8 +60,7 @@ CREATE TABLE gateways (
   max_event_time   timestamptz NOT NULL,  -- event-time watermark
   max_sequence     bigint NOT NULL,
   readings_total   bigint NOT NULL DEFAULT 0,
-  duplicates_total bigint NOT NULL DEFAULT 0,
-  late_total       bigint NOT NULL DEFAULT 0
+  duplicates_total bigint NOT NULL DEFAULT 0
 );
 
 -- Things worth a human's attention: conflicting resends, poison messages.

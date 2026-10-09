@@ -83,6 +83,8 @@ export interface ReadingMessage {
   event_time: string;
   sequence: number;
   received_at: string;
+  /** Position within the HTTP request; orders readings that share received_at. */
+  arrival_idx: number;
   lane: Lane;
 }
 
@@ -151,6 +153,7 @@ export interface ReadingRow {
   value: unknown;
   event_time: string;
   sequence: number;
+  received_at: string;
   ingested_at: string;
   lane: Lane;
   resend_count: number;

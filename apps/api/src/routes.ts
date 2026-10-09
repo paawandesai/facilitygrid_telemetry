@@ -79,14 +79,19 @@ export function registerRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/devices/:id/readings", async (req) => {
     const limit = Math.min(Number(req.query.limit ?? 500) || 500, 5000);
     const { rows } = await pool.query(
-      `SELECT id, gateway_id, metric, value, event_time, sequence, ingested_at, lane, resend_count, late
+      `SELECT id, gateway_id, metric, value, event_time, sequence, received_at, ingested_at, lane, resend_count, late
          FROM readings WHERE device_id = $1
         ORDER BY event_time DESC, gateway_id DESC, sequence DESC
         LIMIT $2`,
       [req.params.id, limit],
     );
     return rows.map(
-      (r): ReadingRow => ({ ...r, event_time: r.event_time.toISOString(), ingested_at: r.ingested_at.toISOString() }),
+      (r): ReadingRow => ({
+        ...r,
+        event_time: r.event_time.toISOString(),
+        received_at: r.received_at.toISOString(),
+        ingested_at: r.ingested_at.toISOString(),
+      }),
     );
   });
 
@@ -130,7 +135,10 @@ export function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/gateways", async (): Promise<GatewaySummary[]> => {
-    const { rows } = await pool.query("SELECT * FROM gateways ORDER BY gateway_id");
+    const { rows } = await pool.query(
+      `SELECT g.*, (SELECT count(*) FROM readings r WHERE r.gateway_id = g.gateway_id AND r.late) AS late_total
+         FROM gateways g ORDER BY g.gateway_id`,
+    );
     const now = Date.now();
     return rows.map((g) => {
       const silent = now - g.last_seen_at.getTime();

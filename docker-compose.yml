@@ -87,6 +87,27 @@ services:
       migrate: { condition: service_completed_successfully }
       redpanda: { condition: service_healthy }
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: facilitygrid-web
+    ports: ["8080:80"]
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+
+  # The provided gateway simulator. Not started by `up`; run it with
+  #   docker compose run --rm generator --scenario trace --seed m-paawandesai
+  generator:
+    image: python:3.12-slim
+    profiles: ["tools"]
+    working_dir: /tools
+    volumes: ["./tools:/tools:ro"]
+    entrypoint: ["python3", "-u", "/tools/telemetry_generator.py", "--target", "http://api:3000/ingest/readings"]
+    depends_on:
+      api: { condition: service_healthy }
+
 volumes:
   pgdata:
   redpanda:
