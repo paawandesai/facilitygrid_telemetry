@@ -1,0 +1,92 @@
+# docker compose up --build
+#   web app          http://localhost:8080
+#   ingest endpoint  http://localhost:3000/ingest/readings
+#   Redpanda Console http://localhost:8088  (topics, consumer lag)
+
+x-backend: &backend
+  build: .
+  image: facilitygrid-backend
+  environment:
+    DATABASE_URL: postgres://telemetry:telemetry@postgres:5432/telemetry
+    KAFKA_BROKERS: redpanda:9092
+    STALE_AFTER_MS: ${STALE_AFTER_MS:-30000}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: telemetry
+      POSTGRES_PASSWORD: telemetry
+      POSTGRES_DB: telemetry
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemetry -d telemetry"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+    volumes: [redpanda:/var/lib/redpanda/data]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  console:
+    image: redpandadata/console:v2.7.2
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports: ["8088:8080"]
+    depends_on:
+      redpanda: { condition: service_healthy }
+
+  migrate:
+    <<: *backend
+    command: ["node", "apps/api/dist/migrate.js"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    command: ["node", "apps/api/dist/main.js"]
+    environment:
+      DATABASE_URL: postgres://telemetry:telemetry@postgres:5432/telemetry
+      KAFKA_BROKERS: redpanda:9092
+      STALE_AFTER_MS: ${STALE_AFTER_MS:-30000}
+      RUN_MIGRATIONS: "false"
+    ports: ["3000:3000"]
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redpanda: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  worker:
+    <<: *backend
+    command: ["node", "apps/worker/dist/main.js"]
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redpanda: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  redpanda:

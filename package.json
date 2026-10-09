@@ -1,0 +1,21 @@
+{
+  "name": "facilitygrid-telemetry",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/shared", "apps/api", "apps/worker", "apps/web"],
+  "scripts": {
+    "build": "npm run build -w @fg/shared && npm run build -w @fg/api -w @fg/worker -w @fg/web",
+    "build:backend": "npm run build -w @fg/shared && npm run build -w @fg/api -w @fg/worker",
+    "typecheck": "npm run build -w @fg/shared && tsc -p apps/api --noEmit && tsc -p apps/worker --noEmit && tsc -p apps/web --noEmit",
+    "test:unit": "vitest run --dir packages",
+    "test:invariants": "vitest run --dir tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "@types/pg": "^8.11.10",
+    "fast-check": "^3.22.0",
+    "pg": "^8.13.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

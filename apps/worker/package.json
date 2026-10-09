@@ -1,0 +1,15 @@
+{
+  "name": "@fg/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@fg/shared": "*",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.13.0"
+  }
+}
