@@ -3,7 +3,7 @@
 // backlog lane and the other the live lane: two different consumers write them
 // concurrently. The device must be registered exactly once and announced once.
 import { afterAll, describe, expect, it } from "vitest";
-import { db, listenDiscoveries, post, settle, uniq } from "./helpers.js";
+import { API, db, listenDiscoveries, post, settle, uniq } from "./helpers.js";
 
 afterAll(() => db.end());
 
@@ -66,7 +66,7 @@ describe("registration race", () => {
     await settle(prefix, 1);
 
     const claim = (i: number) =>
-      fetch(`${process.env.API_URL ?? "http://localhost:3000"}/devices/${device_id}/claim`, {
+      fetch(`${API}/devices/${device_id}/claim`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: `claimant ${i}`, claimed_by: `user-${i}` }),

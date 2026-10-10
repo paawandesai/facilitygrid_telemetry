@@ -1,0 +1,23 @@
+# Dev overlay: publishes the internal services on the host for the test suite,
+# psql and Redpanda Console. Not needed to run the app or the generator.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Every port can be changed in .env; the defaults are picked to rarely clash.
+
+services:
+  api:
+    ports: ["${API_PORT:-13000}:3000"]
+
+  postgres:
+    ports: ["${POSTGRES_PORT:-15432}:5432"]
+
+  redpanda:
+    # The advertised external address in docker-compose.yml follows REDPANDA_PORT too.
+    ports: ["${REDPANDA_PORT:-19092}:19092"]
+
+  console:
+    image: redpandadata/console:v2.7.2
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports: ["${CONSOLE_PORT:-18088}:8080"]
+    depends_on:
+      redpanda: { condition: service_healthy }

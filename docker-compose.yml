@@ -1,7 +1,10 @@
-# docker compose up --build
-#   web app          http://localhost:8080
-#   ingest endpoint  http://localhost:3000/ingest/readings  (also proxied at :8080, the generator's example target)
-#   Redpanda Console http://localhost:8088  (topics, consumer lag)
+# docker-compose up   (or: docker compose up)
+#   Only one host port is published: the web app on ${WEB_PORT:-8080}. It serves the UI
+#   and forwards POST /ingest/readings to the API, so the generator and the browser
+#   need nothing else. Set WEB_PORT in .env (or the shell) if 8080 is taken.
+#   The API, Postgres, Redpanda and Redpanda Console stay on the compose network.
+#   For the host-side tests and debugging, add the dev overlay, which publishes them:
+#     docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 x-backend: &backend
   build: .
@@ -19,7 +22,6 @@ services:
       POSTGRES_USER: telemetry
       POSTGRES_PASSWORD: telemetry
       POSTGRES_DB: telemetry
-    ports: ["5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U telemetry -d telemetry"]
@@ -37,22 +39,13 @@ services:
       - --memory=512M
       - --overprovisioned
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
-    ports: ["19092:19092"]
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${REDPANDA_PORT:-19092}
     volumes: [redpanda:/var/lib/redpanda/data]
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
       interval: 3s
       timeout: 5s
       retries: 40
-
-  console:
-    image: redpandadata/console:v2.7.2
-    environment:
-      KAFKA_BROKERS: redpanda:9092
-    ports: ["8088:8080"]
-    depends_on:
-      redpanda: { condition: service_healthy }
 
   migrate:
     <<: *backend
@@ -69,7 +62,6 @@ services:
       KAFKA_BROKERS: redpanda:9092
       STALE_AFTER_MS: ${STALE_AFTER_MS:-30000}
       RUN_MIGRATIONS: "false"
-    ports: ["3000:3000"]
     restart: unless-stopped
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -94,7 +86,7 @@ services:
       dockerfile: apps/web/Dockerfile
     image: facilitygrid-web
     pull_policy: build
-    ports: ["8080:80"]
+    ports: ["${WEB_PORT:-8080}:80"]
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }

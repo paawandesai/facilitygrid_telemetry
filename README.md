@@ -6,27 +6,38 @@ TypeScript throughout: **Fastify + Zod** API, **KafkaJS** worker, **Redpanda** (
 
 ## Run it
 
-Requires Docker with Compose v2. From a clean checkout:
+Requires Docker with Compose v2 (`docker-compose` or `docker compose`; the classic builder works, BuildKit isn't required). From a clean checkout:
 
 ```sh
-docker compose up --build
+docker-compose up
 ```
 
-The first build takes a few minutes. When `api` reports healthy:
+The first run builds the images and takes a few minutes. When `api` reports healthy, everything is on **one host port**:
 
 | What | Where |
 |---|---|
 | Web app (equipment board, unregistered inbox, gateways) | http://localhost:8080 |
-| Ingest endpoint | `POST http://localhost:3000/ingest/readings` (also accepted at `:8080`) |
-| Redpanda Console (topics, consumer lag) | http://localhost:8088 |
-| Postgres | `localhost:5433`, user/password/db `telemetry` |
+| Ingest endpoint | `POST http://localhost:8080/ingest/readings` (nginx hands it to the API) |
 
-To start again from empty: `docker compose down -v`.
+If 8080 is taken, pick another: `WEB_PORT=9080 docker-compose up`, or put `WEB_PORT=9080` in `.env` (see `.env.example`). The API, Postgres and Redpanda are not published on the host, so they can't clash with anything running locally. After changing code, `docker-compose up --build`. To start again from empty: `docker-compose down -v`.
+
+### Dev overlay (tests, psql, Redpanda Console)
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+| What | Default host port | Override |
+|---|---|---|
+| API (direct) | 13000 | `API_PORT` |
+| Postgres (user/password/db `telemetry`) | 15432 | `POSTGRES_PORT` |
+| Redpanda (Kafka API) | 19092 | `REDPANDA_PORT` |
+| Redpanda Console (topics, consumer lag) | 18088 | `CONSOLE_PORT` |
 
 ## Send readings
 
 ```sh
-curl -X POST localhost:3000/ingest/readings -H 'content-type: application/json' -d '{
+curl -X POST localhost:8080/ingest/readings -H 'content-type: application/json' -d '{
   "gateway_id": "gw-1", "device_id": "ahu-1", "metric": "supply_temp",
   "value": 13.2, "event_time": "2026-10-09T14:00:00Z", "sequence": 1 }'
 ```
@@ -39,13 +50,20 @@ curl -X POST localhost:3000/ingest/readings -H 'content-type: application/json' 
 `tools/telemetry_generator.py` is the provided simulator (Python 3, standard library only). `--target` is the base URL; the script appends `/ingest/readings`. The compose `generator` service runs it on the compose network, already pointed at the API:
 
 ```sh
-docker compose run --rm generator --scenario clean
-docker compose run --rm generator --scenario replay
-docker compose run --rm generator --scenario race
-docker compose run --rm generator --scenario trace --seed paawandesai   # prints the sequence, Enter sends it
+docker-compose run --rm generator --scenario clean
+docker-compose run --rm generator --scenario replay
+docker-compose run --rm generator --scenario race
+docker-compose run --rm generator --scenario trace --seed paawandesai   # prints the sequence, Enter sends it
 ```
 
-Or from the host, with Python 3: `python3 tools/telemetry_generator.py --target http://localhost:3000 --scenario trace --seed paawandesai`. The script's own example target, `http://localhost:8080`, works too, because the web app's nginx forwards `/ingest/readings` to the API. Add `--yes` to send the trace without the prompt.
+Or from the host, with Python 3 (a copy also sits at the repo root, so the brief's command works as written):
+
+```sh
+python3 telemetry_generator.py --target http://localhost:8080 --scenario clean
+python3 telemetry_generator.py --target http://localhost:8080 --scenario trace --seed paawandesai
+```
+
+Use your `WEB_PORT` if you changed it. Add `--yes` to send the trace without the prompt.
 
 The hand trace for seed `paawandesai` is in [DESIGN.md](DESIGN.md#trace---scenario-trace---seed-paawandesai), and the printed sequences are in `docs/`.
 
@@ -57,7 +75,7 @@ After any scenario, check the three invariants directly in Postgres:
 
 ## Tests
 
-The invariant tests run against the live stack (`docker compose up` first). They need Node 20+ on the host.
+The invariant tests run against the live stack started with the dev overlay (above), because they read Postgres directly. They need Node 20+ on the host and honour the same `API_PORT` / `POSTGRES_PORT` variables.
 
 ```sh
 npm ci
@@ -95,11 +113,15 @@ API used by the web app: `GET /devices?status=claimed|unclaimed`, `GET /devices/
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `STALE_AFTER_MS` | `30000` | Silence after which a gateway is offline and its values are shown as stale (`STALE_AFTER_MS=60000 docker compose up`). |
+| `WEB_PORT` | `8080` | The only host port `docker-compose up` publishes. |
+| `API_PORT`, `POSTGRES_PORT`, `REDPANDA_PORT`, `CONSOLE_PORT` | `13000`, `15432`, `19092`, `18088` | Host ports for the dev overlay only. |
+| `STALE_AFTER_MS` | `30000` | Silence after which a gateway is offline and its values are shown as stale. |
+
+Set any of them in the shell or in `.env` (copy `.env.example`).
 
 The backlog-lane threshold (60 s) and future-skew limit (5 min) are constants in `packages/shared/src/index.ts`.
 
 ## Troubleshooting
 
-- **Port already in use**: change the left-hand side of the `ports:` entries in `docker-compose.yml`.
+- **`Bind for …:8080 failed: port is already allocated`**: set `WEB_PORT` (above). The same goes for the dev overlay's ports.
 - **Builds behind a TLS-intercepting proxy** (corporate networks): `scripts/build-behind-proxy.sh` builds the images with the proxy's CA, then `docker compose up --no-build`.

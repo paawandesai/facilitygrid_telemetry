@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import { afterAll, describe, expect, it } from "vitest";
 import { db, post, postUntilAccepted, settle, sleep, uniq } from "./helpers.js";
 
-const compose = (args: string) => execSync(`docker compose ${args}`, { stdio: "pipe" }).toString();
+const compose = (args: string) => execSync(`docker compose -f docker-compose.yml -f docker-compose.dev.yml ${args}`, { stdio: "pipe" }).toString();
 
 afterAll(() => db.end());
 

@@ -1,11 +1,13 @@
 // Shared helpers for the invariant tests. They run against the real stack
-// (docker compose up): HTTP into the API, through Redpanda and the worker,
+// (docker compose -f docker-compose.yml -f docker-compose.dev.yml up): HTTP into the API, through Redpanda and the worker,
 // then read Postgres directly to check what was actually stored.
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 
-export const API = process.env.API_URL ?? "http://localhost:3000";
-export const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://telemetry:telemetry@localhost:5433/telemetry";
+// Host ports come from docker-compose.dev.yml (same env vars, same defaults).
+export const API = process.env.API_URL ?? `http://localhost:${process.env.API_PORT ?? 13000}`;
+export const DATABASE_URL =
+  process.env.DATABASE_URL ?? `postgres://telemetry:telemetry@localhost:${process.env.POSTGRES_PORT ?? 15432}/telemetry`;
 
 pg.types.setTypeParser(20, (v) => Number(v));
 export const db = new pg.Pool({ connectionString: DATABASE_URL, max: 4 });
