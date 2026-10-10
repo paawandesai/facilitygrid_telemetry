@@ -60,6 +60,8 @@ The seed is my GitLab username, `paawandesai`. Printed sequence (`docs/trace-paa
 
 End state: **6 readings**, 1 unclaimed device, current **temperature = 66.78** (A, seq 3), **power_draw = 58.41** (B, seq 1) and **vibration = 7.28** (B, seq 4), with **#2 and #5 late**. Gateway A has 3 readings plus 1 absorbed resend, and B has 3. About 30 s later all three values show *stale* (the gateways stopped reporting), which is expected.
 
+**Real run** (fresh stack, `docker compose run --rm generator --scenario trace --seed paawandesai --yes`): **matched on every point**. There were 6 rows, #2 and #5 were late, and #2 had `resend_count` 1. The three current values were as predicted, the one device was first seen via B, gateway counts were A 3 (+1 resend) and B 3, and there were no anomalies. Nothing needed fixing.
+
 ## What changes at 10× gateways
 
 - **Throughput.** Roughly 1k readings/s per building today (12 gateways × 20 devices × 4 metrics at 1 Hz), so about 10k/s. Row-at-a-time upserts won't keep up: switch to set-based writes per batch (`unnest`), more partitions and more worker replicas. That's safe because the merge is commutative; the concurrency test already races overlapping batches.
