@@ -17,7 +17,7 @@ The first build takes a few minutes. When `api` reports healthy:
 | What | Where |
 |---|---|
 | Web app (equipment board, unregistered inbox, gateways) | http://localhost:8080 |
-| Ingest endpoint | `POST http://localhost:3000/ingest/readings` |
+| Ingest endpoint | `POST http://localhost:3000/ingest/readings` (also accepted at `:8080`) |
 | Redpanda Console (topics, consumer lag) | http://localhost:8088 |
 | Postgres | `localhost:5433`, user/password/db `telemetry` |
 
@@ -36,14 +36,18 @@ curl -X POST localhost:3000/ingest/readings -H 'content-type: application/json' 
 
 ## Run the generator and the seeded trace
 
-`tools/telemetry_generator.py` is the provided simulator. It runs in a container on the compose network, already pointed at the ingest endpoint:
+`tools/telemetry_generator.py` is the provided simulator (Python 3, standard library only). `--target` is the base URL; the script appends `/ingest/readings`. The compose `generator` service runs it on the compose network, already pointed at the API:
 
 ```sh
-docker compose run --rm generator --scenario trace --seed m-paawandesai
-docker compose run --rm generator --help        # list the other scenarios
+docker compose run --rm generator --scenario clean
+docker compose run --rm generator --scenario replay
+docker compose run --rm generator --scenario race
+docker compose run --rm generator --scenario trace --seed m-paawandesai   # prints the sequence, Enter sends it
 ```
 
-Or from the host: `python3 tools/telemetry_generator.py --target http://localhost:3000/ingest/readings --scenario trace --seed m-paawandesai`.
+Or from the host, with Python 3: `python3 tools/telemetry_generator.py --target http://localhost:3000 --scenario trace --seed m-paawandesai`. The script's own example target, `http://localhost:8080`, works too, because the web app's nginx forwards `/ingest/readings` to the API. Add `--yes` to send the trace without the prompt.
+
+The hand trace for seed `m-paawandesai` is in [DESIGN.md](DESIGN.md#trace---scenario-trace---seed-m-paawandesai), and the printed sequences are in `docs/`.
 
 After any scenario, check the three invariants directly in Postgres:
 

@@ -2,9 +2,7 @@
 
 ## The problem as I understood it
 
-Gateways deliver readings **at least once and in any order**: live data, hour-old backlogs, resends of things already delivered, and first sightings of unknown devices, sometimes from two gateways at once. The system has to make three things true *regardless of arrival order*: history has each reading exactly once, current state is the newest reading by *event time*, and a new device is registered exactly once.
-
-So the one idea the design hangs on: **correctness never depends on arrival order.** Every write is an idempotent, order-independent merge enforced by a Postgres constraint. The broker only has to deliver at least once; it supplies durability, back-pressure and replay, and the database supplies correctness.
+Gateways deliver readings **at least once and in any order**: live data, hour-old backlogs, resends, and first sightings of unknown devices, sometimes from two gateways at once. So the one idea the design hangs on: **correctness never depends on arrival order.** Every write is an idempotent, order-independent merge enforced by a Postgres constraint. The broker only has to deliver at least once (durability, back-pressure, replay); the database supplies correctness.
 
 ```
 gateway ─POST─▶ api (Fastify) ─acks=all─▶ Redpanda ─▶ worker (2 consumer groups) ─1 txn/batch─▶ Postgres ─NOTIFY─▶ api ─SSE─▶ web
@@ -23,7 +21,7 @@ A resend with the same identity but **different content** keeps the first copy a
 
 **What I chose: never wait; label the uncertainty.** The current value updates the moment a reading is written. That is safe *because* of invariant 2: a late reading can't regress state, so holding data back would buy no correctness, only latency. Instead the system is honest about what it doesn't know:
 
-- **`late` flag.** A reading is *late* if, when it arrived at the API, a reading with a newer event time for the same device and metric had **already arrived**. It is stored in history but never shown as current. It is defined by arrival order at the edge (a microsecond, monotonic `received_at`), not by which worker lane got there first, so it is reproducible: the property test checks it against an oracle.
+- **`late` flag.** A reading is *late* if, when it arrived at the API, a reading with a newer event time for the same device and metric had **already arrived**. It is stored in history but never shown as current. It is defined by arrival order at the edge (a microsecond, monotonic `received_at`), not by which worker lane got there first, so it is reproducible: the property test checks it against an oracle. (In the generator's `clean` scenario three gateways report the same devices over the same two seconds, so about half its readings are, correctly, flagged late.)
 - **Staleness, per gateway.** Each gateway has a watermark (`max_event_time`) and a `last_seen_at`. After **30 s** of silence (`STALE_AFTER_MS`) every value that gateway supplied is badged *stale* and the gateway shows *offline since …*. The board stays live for everything that is live.
 - **Backlog lane.** Readings more than 60 s old go to `readings.backlog`, consumed by a separate consumer group, so an hour-long replay never sits in front of other gateways' live data.
 
@@ -36,7 +34,7 @@ A resend with the same identity but **different content** keeps the first copy a
 | Global low watermark (Flink-style) | One offline gateway freezes the watermark for the whole building; with an idle timeout it degrades to the fixed delay. Right for finalising aggregates, wrong for a live board. |
 | Drop readings older than a threshold | Violates invariant 1. |
 
-A real watermark *does* matter for anything that must be **finalised**: hourly rollups, or "did this AHU hold setpoint during the functional test window". The design for that (cut, see CUTS.md): a window closes when every gateway reporting into it has a watermark past the window end, or after a 15-minute max wait. A later reading re-opens it and marks the result *revised*. Commissioning evidence that silently changes is worse than evidence marked as revised.
+A real watermark *does* matter for anything **finalised**, such as hourly rollups or "did this AHU hold setpoint during the test window". The design for that is cut (see CUTS.md): a window closes when every reporting gateway's watermark is past its end, or after a 15-minute max wait. A later reading re-opens it and marks the result *revised*, because commissioning evidence that silently changes is worse than evidence marked as revised.
 
 **If a gateway is offline for an hour instead of a minute**, what breaks first:
 1. **Its devices show stale for an hour.** Nothing displayed is wrong, but nothing is current. Anything evaluated in that hour (alarms, functional tests) ran on stale data; we flag it but don't re-evaluate (cut).
@@ -60,11 +58,13 @@ Printed sequence (`docs/trace-m-paawandesai.txt`): device `trace-device-7278`, g
 | 5 | A temperature 91.34 @ t+5 | yes | temperature 91.34 | no |
 | 6 | resend of #1, byte-identical | **no**; #1's `resend_count` becomes 1, no anomaly | unchanged | #1 stays late |
 
-End state: **6 readings** in history, 1 device (unclaimed), current **temperature = 91.34** (A, seq 5, t+5) and **power_draw = 14.06** (A, seq 4, t+2). **Only #1 is flagged late.** Gateway A has 4 readings and B has 2 plus 1 absorbed resend. About 30 s after the run both gateways go quiet, so both values show *stale*. That's expected: the values are still right, the badge just says nobody is reporting.
+End state: **6 readings**, 1 unclaimed device, current **temperature = 91.34** (A, seq 5) and **power_draw = 14.06** (A, seq 4), **only #1 late**. Gateway A has 4 readings, B has 2 plus 1 absorbed resend. About 30 s later both values show *stale* (the gateways stopped reporting), which is expected.
+
+**Real run** (fresh stack, `docker compose run --rm generator --scenario trace --seed m-paawandesai --yes`): **matched on every point**: 6 rows, only #1 late with `resend_count` 1, the same two current values, one device first seen via A, no anomalies. Nothing needed fixing. (The sequence for seed `paawandesai` and its trace are in `docs/trace-paawandesai.md`.)
 
 ## What changes at 10× gateways
 
-- **Throughput.** A rough guess for one building is 12 gateways × 20 devices × 4 metrics at 1 Hz, about 1k readings/s, so 10× is about 10k/s. Row-at-a-time upserts won't keep up: switch to set-based writes per batch (`INSERT … SELECT FROM unnest(…)`), and add partitions and worker replicas. That is safe because the merge is commutative; the concurrency test already races overlapping batches.
+- **Throughput.** Roughly 1k readings/s per building today (12 gateways × 20 devices × 4 metrics at 1 Hz), so about 10k/s. Row-at-a-time upserts won't keep up: switch to set-based writes per batch (`unnest`), more partitions and more worker replicas. That's safe because the merge is commutative; the concurrency test already races overlapping batches.
 - **History growth.** Partition `readings` by month (or TimescaleDB), and give dedupe a horizon (for example 7 days of unique index). Older resends fall back to a slower check. The `late` lookup gets the same bound.
 - **Reconnect storms.** A site-wide outage means 120 gateways replay at once. The backlog lane, API rate limiting (`429` + `Retry-After`; gateways already buffer) and more backlog consumers keep live traffic live.
 - **Hot rows.** Gateway liveness is already aggregated once per batch. At 10× it moves to an in-memory heartbeat.

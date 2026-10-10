@@ -1,6 +1,6 @@
 # docker compose up --build
 #   web app          http://localhost:8080
-#   ingest endpoint  http://localhost:3000/ingest/readings
+#   ingest endpoint  http://localhost:3000/ingest/readings  (also proxied at :8080, the generator's example target)
 #   Redpanda Console http://localhost:8088  (topics, consumer lag)
 
 x-backend: &backend
@@ -104,7 +104,7 @@ services:
     profiles: ["tools"]
     working_dir: /tools
     volumes: ["./tools:/tools:ro"]
-    entrypoint: ["python3", "-u", "/tools/telemetry_generator.py", "--target", "http://api:3000/ingest/readings"]
+    entrypoint: ["python3", "-u", "/tools/telemetry_generator.py", "--target", "http://api:3000"]
     depends_on:
       api: { condition: service_healthy }
 
