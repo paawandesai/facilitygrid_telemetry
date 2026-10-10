@@ -42,25 +42,23 @@ A real watermark *does* matter for anything **finalised**, such as hourly rollup
 3. **The gateway's own buffer** can overflow; we can't recover what it never sends. Sequence gaps would make that visible (not built yet).
 4. Dedupe is unaffected: the unique key has no time horizon (at 10× it needs one, below).
 
-## Trace: `--scenario trace --seed m-paawandesai`
+## Trace: `--scenario trace --seed paawandesai`
 
-Printed sequence (`docs/trace-m-paawandesai.txt`): device `trace-device-7278`, gateways A = `gw-a-m-paawandesai` and B = `gw-b-m-paawandesai`, sent one request each in this order, `sequence` = #. *t* is the run's base time; all readings are within seconds of now, so all take the live lane.
+The seed is my GitLab username, `paawandesai`. Printed sequence (`docs/trace-paawandesai.txt`): device `trace-device-1338`, gateways A = `gw-a-paawandesai` and B = `gw-b-paawandesai`, one request each in this order, `sequence` = #. *t* is the run's base time; every reading is within seconds of now, so all take the live lane.
 
 **Prediction, written before running it:**
 
 | # | Reading | Stored? | Current after it | Late? |
 |---|---|---|---|---|
-| 0 | A temperature 55.88 @ t+3 | yes; **registers the device** (first seen via A, one `device_discovered`) | temperature 55.88 | no |
-| 1 | B temperature 62.9 @ t+0 | yes | temperature stays 55.88 (t+0 < t+3) | **yes**: #0, newer, arrived first |
-| 2 | B power_draw 91.14 @ t+1 | yes | power_draw 91.14 | no |
-| 3 | A temperature 34.94 @ t+4 | yes | temperature 34.94 | no |
-| 4 | A power_draw 14.06 @ t+2 | yes | power_draw 14.06 | no |
-| 5 | A temperature 91.34 @ t+5 | yes | temperature 91.34 | no |
-| 6 | resend of #1, byte-identical | **no**; #1's `resend_count` becomes 1, no anomaly | unchanged | #1 stays late |
+| 0 | B temperature 77.38 @ t+1 | yes; **registers the device** (first seen via B, one `device_discovered`) | temperature 77.38 | no |
+| 1 | B power_draw 58.41 @ t+4 | yes | power_draw 58.41 | no |
+| 2 | A power_draw 27.92 @ t+0 | yes | power_draw stays 58.41 | **yes**: #1, newer, arrived first |
+| 3 | A temperature 66.78 @ t+3 | yes | temperature 66.78 | no |
+| 4 | B vibration 7.28 @ t+5 | yes | vibration 7.28 | no |
+| 5 | A vibration 63.2 @ t+2 | yes | vibration stays 7.28 | **yes**: #4, newer, arrived first |
+| 6 | resend of #2, byte-identical | **no**; #2's `resend_count` becomes 1, no anomaly | unchanged | #2 stays late |
 
-End state: **6 readings**, 1 unclaimed device, current **temperature = 91.34** (A, seq 5) and **power_draw = 14.06** (A, seq 4), **only #1 late**. Gateway A has 4 readings, B has 2 plus 1 absorbed resend. About 30 s later both values show *stale* (the gateways stopped reporting), which is expected.
-
-**Real run** (fresh stack, `docker compose run --rm generator --scenario trace --seed m-paawandesai --yes`): **matched on every point**: 6 rows, only #1 late with `resend_count` 1, the same two current values, one device first seen via A, no anomalies. Nothing needed fixing. (The sequence for seed `paawandesai` and its trace are in `docs/trace-paawandesai.md`.)
+End state: **6 readings**, 1 unclaimed device, current **temperature = 66.78** (A, seq 3), **power_draw = 58.41** (B, seq 1) and **vibration = 7.28** (B, seq 4), with **#2 and #5 late**. Gateway A has 3 readings plus 1 absorbed resend, and B has 3. About 30 s later all three values show *stale* (the gateways stopped reporting), which is expected.
 
 ## What changes at 10× gateways
 

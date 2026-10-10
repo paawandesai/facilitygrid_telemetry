@@ -98,7 +98,7 @@ services:
       api: { condition: service_healthy }
 
   # The provided gateway simulator. Not started by `up`; run it with
-  #   docker compose run --rm generator --scenario trace --seed m-paawandesai
+  #   docker compose run --rm generator --scenario trace --seed paawandesai
   generator:
     image: python:3.12-slim
     profiles: ["tools"]

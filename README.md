@@ -42,12 +42,12 @@ curl -X POST localhost:3000/ingest/readings -H 'content-type: application/json' 
 docker compose run --rm generator --scenario clean
 docker compose run --rm generator --scenario replay
 docker compose run --rm generator --scenario race
-docker compose run --rm generator --scenario trace --seed m-paawandesai   # prints the sequence, Enter sends it
+docker compose run --rm generator --scenario trace --seed paawandesai   # prints the sequence, Enter sends it
 ```
 
-Or from the host, with Python 3: `python3 tools/telemetry_generator.py --target http://localhost:3000 --scenario trace --seed m-paawandesai`. The script's own example target, `http://localhost:8080`, works too, because the web app's nginx forwards `/ingest/readings` to the API. Add `--yes` to send the trace without the prompt.
+Or from the host, with Python 3: `python3 tools/telemetry_generator.py --target http://localhost:3000 --scenario trace --seed paawandesai`. The script's own example target, `http://localhost:8080`, works too, because the web app's nginx forwards `/ingest/readings` to the API. Add `--yes` to send the trace without the prompt.
 
-The hand trace for seed `m-paawandesai` is in [DESIGN.md](DESIGN.md#trace---scenario-trace---seed-m-paawandesai), and the printed sequences are in `docs/`.
+The hand trace for seed `paawandesai` is in [DESIGN.md](DESIGN.md#trace---scenario-trace---seed-paawandesai), and the printed sequences are in `docs/`.
 
 After any scenario, check the three invariants directly in Postgres:
 
