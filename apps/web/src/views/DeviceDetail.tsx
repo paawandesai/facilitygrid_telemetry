@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { ago, time, value } from "../format";
 import { MetricTable } from "./MetricTable";
+import { DeviceTrends } from "./DeviceTrends";
 import { useNow } from "./useNow";
 
 export function DeviceDetail({ id }: { id: string }) {
@@ -29,6 +30,8 @@ export function DeviceDetail({ id }: { id: string }) {
 
       <h2>Current state</h2>
       <MetricTable metrics={d.metrics} now={now} />
+
+      <DeviceTrends id={d.device_id} now={now} />
 
       <h2>History</h2>
       <p className="muted">

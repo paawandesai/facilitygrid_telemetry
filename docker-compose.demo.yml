@@ -1,0 +1,16 @@
+# Demo overlay: a populated building that keeps reporting, with faults injected.
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+# Adds one service on top of the normal stack; a plain `docker-compose up` is unchanged
+# and starts empty. Details: scripts/demo_feed.py. Reset with `docker compose down -v`.
+
+services:
+  demo:
+    image: python:3.12-slim
+    working_dir: /demo
+    volumes: ["./scripts/demo_feed.py:/demo/demo_feed.py:ro"]
+    command: ["python3", "-u", "/demo/demo_feed.py", "--target", "http://api:3000", "--api", "http://api:3000"]
+    environment:
+      DEMO_BACKFILL_HOURS: ${DEMO_BACKFILL_HOURS:-3}
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }

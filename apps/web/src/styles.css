@@ -105,3 +105,58 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 .toasts { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
 .toast { background: var(--text); color: var(--bg); padding: 10px 14px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+
+/* Live value highlight: replays whenever a metric gets a new reading. */
+@keyframes flash { from { background: var(--late-bg); } to { background: transparent; } }
+.flash { animation: flash 1.2s ease-out; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.section-head h2 { margin-bottom: 0; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented button { border: 0; border-radius: 0; padding: 4px 12px; background: var(--panel); }
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button.on { background: var(--accent); color: white; font-weight: 600; }
+
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; margin-top: 10px; }
+.chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.chart-card .chips { justify-content: flex-start; margin-top: 6px; }
+.chart-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .band { fill: var(--accent); opacity: 0.14; }
+.chart .line, .spark .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark .line { stroke-width: 1.5; }
+.spark-end { fill: var(--accent); }
+.spark { display: block; }
+.spark-cell { width: 100px; }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .mark-hover { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+.chart .mark-late { fill: var(--panel); stroke: var(--late); stroke-width: 2; }
+.chart .mark-outlier { fill: var(--warn); stroke: var(--panel); stroke-width: 2; }
+.chart-empty { padding: 40px 0; text-align: center; }
+.tooltip { position: absolute; top: 4px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; pointer-events: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.key { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; }
+.key-late { border: 2px solid var(--late); }
+.key-outlier { background: var(--warn); }
+.chip-warn { border-color: var(--warn); }
+.chip-warn b { color: var(--warn); }
+
+.callout { background: var(--warn-bg); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.table tr.group-start td { border-top: 2px solid var(--border); }
+.table a .badge { margin-left: 6px; }
+
+.proof-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 14px; }
+.proof-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.proof-value { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.proof-label { font-weight: 600; }
+.code { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@media (max-width: 720px) {
+  header { flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; }
+  nav { order: 3; flex-basis: 100%; overflow-x: auto; }
+  main, .stats { padding-left: 16px; padding-right: 16px; }
+  .grid, .chart-grid { grid-template-columns: 1fr; }
+  .table { display: block; overflow-x: auto; }
+}

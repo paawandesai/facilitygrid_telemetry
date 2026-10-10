@@ -23,6 +23,7 @@ services:
       POSTGRES_PASSWORD: telemetry
       POSTGRES_DB: telemetry
     volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U telemetry -d telemetry"]
       interval: 2s
@@ -41,6 +42,7 @@ services:
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${REDPANDA_PORT:-19092}
     volumes: [redpanda:/var/lib/redpanda/data]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
       interval: 3s

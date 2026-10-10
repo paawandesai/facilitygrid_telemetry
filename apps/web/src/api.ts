@@ -34,6 +34,52 @@ export interface Anomaly {
   created_at: string;
 }
 
+/** [bucket start ms, avg, min, max] */
+export type SeriesPoint = [number, number, number, number];
+
+export interface MetricAnalysis {
+  device_id: string;
+  metric: string;
+  n: number;
+  min: number;
+  max: number;
+  avg: number;
+  sd: number;
+  slope_per_hour: number | null;
+  outliers: number;
+  last: unknown;
+  series: SeriesPoint[];
+}
+
+export interface MarkPoint {
+  metric: string;
+  t: number;
+  v: number;
+  late: boolean;
+  outlier: boolean;
+  z: number | null;
+}
+
+export interface DeviceAnalysis {
+  minutes: number;
+  metrics: MetricAnalysis[];
+  points: MarkPoint[];
+}
+
+export interface Proof {
+  checked_at: string;
+  duplicates_dropped: number;
+  readings_resent: number;
+  readings_stored: number;
+  late_ignored: number;
+  late_backlog: number;
+  backlog_total: number;
+  race_registrations_deduped: number;
+  devices: number;
+  conflicting_resends: number;
+  checks: { duplicate_rows: number; state_not_newest: number; registration_mismatch: number };
+}
+
 export const api = {
   devices: (status?: "claimed" | "unclaimed") => get<DeviceSummary[]>(`/devices${status ? `?status=${status}` : ""}`),
   device: (id: string) => get<DeviceSummary>(`/devices/${encodeURIComponent(id)}`),
@@ -41,6 +87,10 @@ export const api = {
   gateways: () => get<GatewaySummary[]>("/gateways"),
   stats: () => get<Stats>("/stats"),
   anomalies: () => get<Anomaly[]>("/anomalies"),
+  proof: () => get<Proof>("/proof"),
+  analysis: (minutes: number, points = 60) => get<MetricAnalysis[]>(`/analysis?minutes=${minutes}&points=${points}`),
+  deviceAnalysis: (id: string, minutes: number) =>
+    get<DeviceAnalysis>(`/devices/${encodeURIComponent(id)}/analysis?minutes=${minutes}&points=120`),
   claim: async (id: string, body: ClaimInput): Promise<DeviceSummary> => {
     const res = await fetch(`${BASE}/devices/${encodeURIComponent(id)}/claim`, {
       method: "POST",

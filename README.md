@@ -16,10 +16,18 @@ The first run builds the images and takes a few minutes. When `api` reports heal
 
 | What | Where |
 |---|---|
-| Web app (equipment board, unregistered inbox, gateways) | http://localhost:8080 |
+| Web app (equipment board, unregistered inbox, gateways, analysis, proof) | http://localhost:8080 |
 | Ingest endpoint | `POST http://localhost:8080/ingest/readings` (nginx hands it to the API) |
 
 If 8080 is taken, pick another: `WEB_PORT=9080 docker-compose up`, or put `WEB_PORT=9080` in `.env` (see `.env.example`). The API, Postgres and Redpanda are not published on the host, so they can't clash with anything running locally. After changing code, `docker-compose up --build`. To start again from empty: `docker-compose down -v`.
+
+### Demo overlay (a populated building that keeps reporting)
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up
+```
+
+Adds one `demo` service ([scripts/demo_feed.py](scripts/demo_feed.py), Python standard library) on top of the normal stack. It backfills three hours of history for 11 pieces of equipment on three gateways and claims them, then streams a batch per gateway every 10 s. On a 10-minute cycle it injects the faults the system is built for: resent batches, a gateway that drops off for 90 s and then flushes its backlog after a newer reading, a new device reported by two gateways at once, and short spikes that show up as outliers. Values are a pure function of device, metric and event time, so restarting the feed resends identical readings rather than conflicting ones. Plain `docker-compose up` is unchanged and starts empty. To host it publicly for free, see [DEPLOY.md](DEPLOY.md).
 
 ### Dev overlay (tests, psql, Redpanda Console)
 
@@ -107,7 +115,18 @@ scripts/          check.sh (SQL invariant check), build-behind-proxy.sh
 telemetry_generator.py   the provided gateway simulator
 ```
 
-API used by the web app: `GET /devices?status=claimed|unclaimed`, `GET /devices/:id`, `GET /devices/:id/readings`, `POST /devices/:id/claim`, `GET /gateways`, `GET /anomalies`, `GET /stats`, `GET /events` (SSE), `GET /healthz`.
+API used by the web app: `GET /devices?status=claimed|unclaimed`, `GET /devices/:id`, `GET /devices/:id/readings`, `POST /devices/:id/claim`, `GET /gateways`, `GET /anomalies`, `GET /stats`, `GET /analysis?minutes=&points=` (per-metric min/max/avg/σ, trend slope, outlier count and a bucketed series), `GET /devices/:id/analysis` (the same plus late and outlier points), `GET /proof` (duplicates dropped, late readings kept out of current state, racing registrations deduplicated, and the `check.sql` invariant checks), `GET /events` (SSE), `GET /healthz`.
+
+## The web app
+
+| Page | What it shows |
+|---|---|
+| Equipment | Claimed devices with their current value per metric, a 30-minute sparkline, and a stale badge when the gateway goes silent. Values flash as new readings land. |
+| Unregistered | Devices a gateway has reported that nobody has claimed yet, with the claim form. |
+| Gateways | Online/offline, event-time watermark, resends absorbed and late readings per gateway. |
+| Analysis | Every numeric metric over 15 min to 24 h: last, min, avg, max, σ, trend per hour and outliers (over 3σ from the window mean), with the ones that need a look listed first. |
+| Proof | Live counters for each invariant and the three violation checks from `scripts/check.sql`, re-run every few seconds. |
+| Device page | Current state, a chart per metric (average line, min–max band, late readings as rings, outliers as dots, gaps where the gateway was silent) and the full history. |
 
 ## Configuration
 

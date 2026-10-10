@@ -6,14 +6,24 @@ import { Board } from "./views/Board";
 import { Inbox } from "./views/Inbox";
 import { Gateways } from "./views/Gateways";
 import { DeviceDetail } from "./views/DeviceDetail";
+import { Analysis } from "./views/Analysis";
+import { Proof } from "./views/Proof";
 
-type Route = { view: "board" } | { view: "inbox" } | { view: "gateways" } | { view: "device"; id: string };
+type Route =
+  | { view: "board" }
+  | { view: "inbox" }
+  | { view: "gateways" }
+  | { view: "analysis" }
+  | { view: "proof" }
+  | { view: "device"; id: string };
 
 function parseRoute(hash: string): Route {
   const h = hash.replace(/^#\/?/, "");
   if (h.startsWith("device/")) return { view: "device", id: decodeURIComponent(h.slice(7)) };
   if (h === "inbox") return { view: "inbox" };
   if (h === "gateways") return { view: "gateways" };
+  if (h === "analysis") return { view: "analysis" };
+  if (h === "proof") return { view: "proof" };
   return { view: "board" };
 }
 
@@ -70,6 +80,8 @@ export function App() {
             </>,
           )}
           {tab("gateways", "#/gateways", "Gateways")}
+          {tab("analysis", "#/analysis", "Analysis")}
+          {tab("proof", "#/proof", "Proof")}
         </nav>
         <div className={`live ${live ? "on" : ""}`} title="Live updates via Server-Sent Events">
           <span className="dot" /> {live ? "Live" : "Reconnecting"}
@@ -90,6 +102,8 @@ export function App() {
         {route.view === "board" && <Board />}
         {route.view === "inbox" && <Inbox />}
         {route.view === "gateways" && <Gateways />}
+        {route.view === "analysis" && <Analysis />}
+        {route.view === "proof" && <Proof />}
         {route.view === "device" && <DeviceDetail id={route.id} />}
       </main>
 

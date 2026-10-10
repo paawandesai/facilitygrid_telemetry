@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import type { Producer } from "kafkajs";
 import { registerIngest } from "./ingest.js";
 import { registerRoutes } from "./routes.js";
+import { registerAnalysis } from "./analysis.js";
 import { EventHub } from "./events.js";
 import { pool } from "./db.js";
 import { producerReady } from "./kafka.js";
@@ -35,6 +36,7 @@ export function buildApp(producer: Producer, hub: EventHub) {
 
   registerIngest(app, producer);
   registerRoutes(app);
+  registerAnalysis(app);
   hub.register(app);
   return app;
 }
