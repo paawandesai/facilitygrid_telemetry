@@ -47,7 +47,7 @@ curl -X POST localhost:8080/ingest/readings -H 'content-type: application/json' 
 
 ## Run the generator and the seeded trace
 
-`tools/telemetry_generator.py` is the provided simulator (Python 3, standard library only). `--target` is the base URL; the script appends `/ingest/readings`. The compose `generator` service runs it on the compose network, already pointed at the API:
+`telemetry_generator.py` (repo root) is the provided simulator (Python 3, standard library only). `--target` is the base URL; the script appends `/ingest/readings`. The compose `generator` service runs it on the compose network, already pointed at the API:
 
 ```sh
 docker-compose run --rm generator --scenario clean
@@ -56,7 +56,7 @@ docker-compose run --rm generator --scenario race
 docker-compose run --rm generator --scenario trace --seed paawandesai   # prints the sequence, Enter sends it
 ```
 
-Or from the host, with Python 3 (a copy also sits at the repo root, so the brief's command works as written):
+Or from the host, with Python 3, exactly as the brief writes it:
 
 ```sh
 python3 telemetry_generator.py --target http://localhost:8080 --scenario clean
@@ -104,7 +104,7 @@ packages/shared   Zod wire contract, ordering and lane rules shared by all three
 db/migrations     The schema; the invariants live here as constraints
 tests/            Invariant tests against the running stack
 scripts/          check.sh (SQL invariant check), build-behind-proxy.sh
-tools/            telemetry_generator.py
+telemetry_generator.py   the provided gateway simulator
 ```
 
 API used by the web app: `GET /devices?status=claimed|unclaimed`, `GET /devices/:id`, `GET /devices/:id/readings`, `POST /devices/:id/claim`, `GET /gateways`, `GET /anomalies`, `GET /stats`, `GET /events` (SSE), `GET /healthz`.

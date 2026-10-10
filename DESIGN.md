@@ -43,7 +43,7 @@ A watermark *does* matter for **finalised** results (hourly rollups, test window
 
 ## Trace: `--scenario trace --seed paawandesai`
 
-The seed is my GitLab username, `paawandesai` (the same exercise for my GitHub login, `m-paawandesai`, is in `docs/trace-m-paawandesai.md`). Printed sequence (`docs/trace-paawandesai.txt`): device `trace-device-1338`, A = `gw-a-paawandesai`, B = `gw-b-paawandesai`, one request each in order, `sequence` = #, *t* = base time (all live lane).
+The seed is my GitLab username, `paawandesai`. Printed sequence (`docs/trace-paawandesai.txt`): device `trace-device-1338`, A = `gw-a-paawandesai`, B = `gw-b-paawandesai`, one request each in order, `sequence` = #, *t* = base time (all live lane).
 
 **Prediction, written before running it:**
 
