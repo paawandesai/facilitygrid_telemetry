@@ -6,6 +6,7 @@
 x-backend: &backend
   build: .
   image: facilitygrid-backend
+  pull_policy: build
   environment:
     DATABASE_URL: postgres://telemetry:telemetry@postgres:5432/telemetry
     KAFKA_BROKERS: redpanda:9092
@@ -92,6 +93,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     image: facilitygrid-web
+    pull_policy: build
     ports: ["8080:80"]
     restart: unless-stopped
     depends_on:

@@ -1,10 +1,11 @@
 # Built from the repo root: docker build -f apps/web/Dockerfile .
 FROM node:22-alpine AS build
 WORKDIR /app
+ARG NPM_CA=""
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
-RUN --mount=type=secret,id=npm_ca,required=false NODE_EXTRA_CA_CERTS=/run/secrets/npm_ca \
+RUN if [ -n "$NPM_CA" ]; then printf '%s\n' "$NPM_CA" > /tmp/npm-ca.pem; export NODE_EXTRA_CA_CERTS=/tmp/npm-ca.pem; fi; \
     npm ci --no-audit --no-fund -w @fg/shared -w @fg/web --include-workspace-root
 COPY packages/shared packages/shared
 COPY apps/web apps/web
