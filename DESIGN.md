@@ -46,7 +46,21 @@ A real watermark *does* matter for anything that must be **finalised**: hourly r
 
 ## Trace: `--scenario trace --seed m-paawandesai`
 
-> **Pending.** The generator (`tools/telemetry_generator.py`) is not in the repo yet. Per the brief, this section is written from the printed sequence *before* running it against the system, then checked against what the system actually stored, with the result recorded here.
+Printed sequence (`docs/trace-m-paawandesai.txt`): device `trace-device-7278`, gateways A = `gw-a-m-paawandesai` and B = `gw-b-m-paawandesai`, sent one request each in this order, `sequence` = #. *t* is the run's base time; all readings are within seconds of now, so all take the live lane.
+
+**Prediction, written before running it:**
+
+| # | Reading | Stored? | Current after it | Late? |
+|---|---|---|---|---|
+| 0 | A temperature 55.88 @ t+3 | yes; **registers the device** (first seen via A, one `device_discovered`) | temperature 55.88 | no |
+| 1 | B temperature 62.9 @ t+0 | yes | temperature stays 55.88 (t+0 < t+3) | **yes**: #0, newer, arrived first |
+| 2 | B power_draw 91.14 @ t+1 | yes | power_draw 91.14 | no |
+| 3 | A temperature 34.94 @ t+4 | yes | temperature 34.94 | no |
+| 4 | A power_draw 14.06 @ t+2 | yes | power_draw 14.06 | no |
+| 5 | A temperature 91.34 @ t+5 | yes | temperature 91.34 | no |
+| 6 | resend of #1, byte-identical | **no**; #1's `resend_count` becomes 1, no anomaly | unchanged | #1 stays late |
+
+End state: **6 readings** in history, 1 device (unclaimed), current **temperature = 91.34** (A, seq 5, t+5) and **power_draw = 14.06** (A, seq 4, t+2). **Only #1 is flagged late.** Gateway A has 4 readings and B has 2 plus 1 absorbed resend. About 30 s after the run both gateways go quiet, so both values show *stale*. That's expected: the values are still right, the badge just says nobody is reporting.
 
 ## What changes at 10× gateways
 
